@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>月饼哥哥｜团购复盘周报</title>
+<style>
+  :root{--ink:#2b2b33;--brand:#c0392b;--brand2:#e67e22;--line:#e7e2d8;--bg:#faf7f1;--card:#ffffff;--muted:#8a8578;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.55}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 18px 60px}
+  header{border-bottom:3px solid var(--brand);padding-bottom:12px;margin-bottom:20px}
+  h1{font-size:24px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:18px 0}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center}
+  .kpi .v{font-size:22px;font-weight:700;color:var(--brand)}
+  .kpi .l{font-size:12px;color:var(--muted);margin-top:2px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:14px 0}
+  h2{font-size:16px;margin:0 0 10px;border-left:4px solid var(--brand2);padding-left:8px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left}
+  th{color:var(--muted);font-weight:600;background:#f4efe6}
+  .bar{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}
+  .bar .track{flex:1;background:#efe9dd;border-radius:6px;height:14px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,var(--brand2),var(--brand))}
+  .tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:#f4efe6;margin-right:4px}
+  .warn{color:var(--brand);font-weight:700}
+  .empty{color:var(--muted);font-style:italic}
+  .actions{margin:18px 0}
+  button{background:var(--brand);color:#fff;border:0;border-radius:10px;padding:10px 18px;font-size:14px;cursor:pointer}
+  footer{color:var(--muted);font-size:12px;margin-top:24px;text-align:center}
+  @media print{.actions{display:none}body{background:#fff}.wrap{padding:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>月饼哥哥｜团购复盘周报</h1>
+    <div class="sub" id="meta"></div>
+  </header>
+  <div class="kpis" id="kpis"></div>
+  <section><h2>① 漏斗快照</h2><div id="funnel"></div></section>
+  <section><h2>② 意向分布（在谈）</h2><div id="intent"></div></section>
+  <section><h2>③ 风险清单（逾期 / 断档）</h2><div id="risk"></div></section>
+  <section><h2>④ 流失归因</h2><div id="lost"></div></section>
+  <section><h2>⑤ 下周重点</h2><div id="focus"></div></section>
+  <section><h2>⑥ 分组概览</h2><div id="group"></div></section>
+  <div class="actions"><button onclick="window.print()">打印 / 另存 PDF</button></div>
+  <footer>本页面自包含、可离线打开。数字全部来自引擎确定性统计，归因证据等级见 references/review-methodology.md。</footer>
+</div>
+<script>
+const payload = __REPORT_DATA__;
+const s = (payload && payload.summary) || {};
+const due = (payload && payload.due) || null;
+const money = v => "¥" + Math.round(v||0).toLocaleString("zh-CN");
+const esc = v => String(v==null?"":v).replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const empty = t => '<div class="empty">'+t+'</div>';
+
+document.getElementById("meta").textContent =
+  "周期：" + (s.period||"weekly") + " ｜ 窗口：" + ((s.window&&s.window.start)||"—") + " ~ " + ((s.window&&s.window.end)||"—") +
+  (payload.generated_for ? " ｜ " + payload.generated_for : "");
+
+document.getElementById("kpis").innerHTML = [
+  ["新增商机", s.new_opportunities||0],
+  ["在谈盘子", money(s.pipeline_amount)],
+  ["成交(签约)", money(s.won_amount)],
+  ["逾期", s.overdue_count||0],
+].map(k=>'<div class="kpi"><div class="v">'+esc(k[1])+'</div><div class="l">'+k[0]+'</div></div>').join("");
+
+// 漏斗
+const stages = Object.keys(s.stage_buckets||{});
+if (stages.length){
+  const max = Math.max(1, ...Object.values(s.stage_buckets));
+  document.getElementById("funnel").innerHTML = stages.map(st=>{
+    const n = s.stage_buckets[st];
+    return '<div class="bar"><span style="width:74px">'+esc(st)+'</span><div class="track"><div class="fill" style="width:'+Math.round(n/max*100)+'%"></div></div><span>'+n+'</span></div>';
+  }).join("") +
+  '<p style="font-size:13px;margin-top:8px">成交(签约) <b>'+ (s.signed_count||0) +'</b> 条 / '+ money(s.won_amount) +
+  '，其中已回款 <b>'+(s.collected_count||0)+'</b> 条 / '+ money(s.collected_amount) +
+  '；流失 <b>'+(s.lost_count||0)+'</b> 条。' +
+  (s.conversion_rate!=null ? ' 成交转化率 <b>'+(s.conversion_rate*100).toFixed(0)+'%</b>' : (' <span class="empty">'+esc(s.conversion_note||"")+'</span>')) + '</p>';
+} else { document.getElementById("funnel").innerHTML = empty("暂无阶段数据"); }
+
+// 意向
+const levels = Object.keys(s.intent_buckets||{});
+if (levels.length){
+  const max = Math.max(1, ...Object.values(s.intent_buckets));
+  document.getElementById("intent").innerHTML = levels.map(lv=>{
+    const n = s.intent_buckets[lv];
+    return '<div class="bar"><span style="width:74px">'+esc(lv)+' 级</span><div class="track"><div class="fill" style="width:'+Math.round(n/max*100)+'%"></div></div><span>'+n+'</span></div>';
+  }).join("");
+} else { document.getElementById("intent").innerHTML = empty("暂无在谈商机"); }
+
+// 风险
+(function(){
+  const el = document.getElementById("risk");
+  let rows = [];
+  if (due && due.overdue) rows = rows.concat(due.overdue.map(it=>["逾期"+(it.days_overdue||0)+"天", it]));
+  if (due && due.today_due) rows = rows.concat(due.today_due.map(it=>["今日到期", it]));
+  if (!rows.length){ el.innerHTML = empty(due ? "本期无逾期/今日到期。" : "未提供到期数据（可加 --due 传入 crm.py due --json）。"); }
+  else {
+    el.innerHTML = '<table><tr><th>标记</th><th>商机</th><th>客户</th><th>意向</th><th>阶段</th><th>跟进人</th></tr>' +
+      rows.map(r=>'<tr><td class="warn">'+esc(r[0])+'</td><td>'+esc(r[1].opp_id)+'</td><td>'+esc(r[1].customer_name)+'</td><td>'+esc(r[1].intent_level)+'</td><td>'+esc(r[1].stage)+'</td><td>'+esc(r[1].owner||"未指派")+'</td></tr>').join("") + '</table>';
+  }
+  if (due && due.no_date && due.no_date.length){
+    el.innerHTML += '<p style="font-size:13px;margin-top:8px" class="warn">跟进断档（无下次跟进日期）：'+ due.no_date.map(o=>esc(o.opp_id)).join("、") +'</p>';
+  }
+})();
+
+// 流失
+(function(){
+  const el = document.getElementById("lost");
+  const arr = s.top_lost_reasons||[];
+  if (!arr.length){ el.innerHTML = empty("本期无流失记录。"); return; }
+  el.innerHTML = '<table><tr><th>流失原因</th><th>条数</th></tr>' + arr.map(r=>'<tr><td>'+esc(r.reason)+'</td><td>'+r.count+'</td></tr>').join("") + '</table>' +
+    '<p class="empty" style="font-size:12px">空缺原因需店长补录；归因措辞按方法论标注证据等级，勿夸大成因。</p>';
+})();
+
+// 下周重点
+(function(){
+  const el = document.getElementById("focus");
+  const arr = s.next_week_focus||[];
+  if (!arr.length){ el.innerHTML = empty("未来7天无到期商机。"); return; }
+  el.innerHTML = '<table><tr><th>日期</th><th>商机</th><th>客户</th><th>意向</th><th>阶段</th><th>跟进人</th></tr>' +
+    arr.map(f=>'<tr><td>'+esc(f.next_follow_date)+'</td><td>'+esc(f.opp_id)+'</td><td>'+esc(f.customer_name)+'</td><td>'+esc(f.intent_level)+'</td><td>'+esc(f.stage)+'</td><td>'+esc(f.owner||"未指派")+'</td></tr>').join("") + '</table>';
+})();
+
+// 分组
+(function(){
+  const el = document.getElementById("group");
+  const block = (title, obj) => {
+    const keys = Object.keys(obj||{});
+    if (!keys.length) return "";
+    return '<h3 style="font-size:14px;margin:10px 0 4px">'+title+'</h3><table><tr><th>名称</th><th>在谈条数</th><th>在谈金额</th></tr>' +
+      keys.map(k=>'<tr><td>'+esc(k)+'</td><td>'+obj[k].count+'</td><td>'+money(obj[k].pipeline_amount)+'</td></tr>').join("") + '</table>';
+  };
+  const html = block("按跟进人", s.by_owner) + block("按门店", s.by_store);
+  el.innerHTML = html || empty("暂无分组数据");
+})();
+</script>
+</body>
+</html>
