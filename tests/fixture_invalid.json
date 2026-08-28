@@ -1,0 +1,14 @@
+{
+  "intent": "add_customer",
+  "amount": 100,
+  "customer": {
+    "name": "",
+    "level": "高",
+    "phone_number": "123"
+  },
+  "opportunity": {
+    "intent_level": "高",
+    "stage": "方案报价",
+    "amount": 100
+  }
+}

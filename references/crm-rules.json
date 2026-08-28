@@ -1,0 +1,569 @@
+{
+  "schema_version": 2,
+  "source_of_truth": "references/change-request-v1.2.md（V1.2 变更需求说明，唯一真相源）。本文件的枚举、阶段、列顺序、编号规则、统计口径一律以该文档为准；桌面《月饼哥哥_团购客户管理双表模板》中未被V1.2覆盖的部分（总部客户档案表、编号格式）继续有效。",
+  "field_provenance": {
+    "note": "字段三分法：voice=店长语音自动提取；system=系统自动生成/按账号带出（不要从话语抽取）；hq=总部补充或确认（门店首次不录）。",
+    "门店客户商机表": {
+      "opp_id": "system",
+      "cust_id": "system",
+      "customer_name": "voice",
+      "customer_address": "voice",
+      "contact": "voice",
+      "contact_phone": "voice",
+      "store": "system",
+      "lead_source": "voice",
+      "customer_need": "voice",
+      "demand_category": "voice",
+      "quantity": "voice",
+      "intent_level": "voice",
+      "expected_amount": "voice",
+      "stage": "voice",
+      "latest_follow": "voice",
+      "next_follow_date": "voice",
+      "owner": "system",
+      "payment_date": "voice",
+      "payment_amount": "voice",
+      "delivery_date": "voice",
+      "lost_reason": "voice",
+      "updated_at": "system"
+    },
+    "总部客户档案表": {
+      "cust_id": "system",
+      "name": "voice",
+      "short_name": "hq",
+      "customer_type": "hq",
+      "industry": "hq",
+      "customer_level": "hq",
+      "region": "voice",
+      "address": "voice",
+      "contact": "voice",
+      "title": "hq",
+      "contact_phone": "voice",
+      "other_contacts": "hq",
+      "first_lead_source": "voice",
+      "first_store": "system",
+      "current_store": "hq",
+      "customer_owner": "hq",
+      "first_coop_date": "system",
+      "last_coop_date": "system",
+      "history_products": "system",
+      "history_deal_count": "system",
+      "total_deal_amount": "system",
+      "year_deal_amount": "system",
+      "preference": "voice",
+      "tags": "hq",
+      "customer_status": "system",
+      "notes": "hq",
+      "archive_updated_at": "system"
+    }
+  },
+  "system_auto_fields": {
+    "note": "以下字段由系统按账号/时间/编号规则生成或带出，Agent 不要从话语抽取、不要猜测；store/owner 默认取账号上下文（prepare 的 --store/--owner），话语中明确提及时可用。",
+    "fields": [
+      "opp_id",
+      "cust_id",
+      "store",
+      "owner",
+      "updated_at",
+      "archive_updated_at",
+      "first_store",
+      "first_coop_date",
+      "last_coop_date",
+      "history_products",
+      "history_deal_count",
+      "total_deal_amount",
+      "year_deal_amount",
+      "customer_status"
+    ]
+  },
+  "confirm_required": {
+    "note": "关键控制（代码硬闸口）：金额、数量、电话、日期四类字段抽取后必须由店长显式确认才写入。crm.py 写入类模式（add/update/log/close/apply）命中这些字段而未带 --confirmed 时拒写并回 needs_confirmation(reason=confirm_required)。仅统计用户显式给出的值；系统按规则推算的 next_follow_date 不触发。",
+    "enforced_by": "scripts/crm.py confirm_gate() + --confirmed",
+    "amount": [
+      "opportunity.expected_amount",
+      "opportunity.payment_amount"
+    ],
+    "quantity": [
+      "opportunity.quantity"
+    ],
+    "phone": [
+      "customer.contact_phone"
+    ],
+    "date": [
+      "recorded_at",
+      "opportunity.next_follow_date",
+      "opportunity.payment_date",
+      "opportunity.delivery_date",
+      "follow_up.followed_at"
+    ]
+  },
+  "voice_template": "今天联系了【客户名称】的【联系人】，客户需要【产品/用途】，预计【数量】，预算【金额】，目前进展到【阶段】，沟通情况是【结果】，计划【日期】再次跟进。",
+  "id_formats": {
+    "customer": "KH-{year}-{seq:04d}",
+    "opportunity": "MO-{year}-{seq:04d}",
+    "follow_up": "FU-{year}-{seq:04d}",
+    "dedup_key": [
+      "customer_name",
+      "contact_phone"
+    ],
+    "dedup_note": "新增前按 客户名称+联系电话 查询去重；名称相近时交人工确认，不自动合并。"
+  },
+  "stores": [
+    "月湖店",
+    "体验中心店",
+    "国金店",
+    "五一店",
+    "花样汇店"
+  ],
+  "store_aliases": {
+    "体验店": "体验中心店"
+  },
+  "intent_levels": [
+    "A",
+    "B",
+    "C",
+    "D"
+  ],
+  "intent_level_display": {
+    "A": "A-必成",
+    "B": "B-高潜",
+    "C": "C-跟进",
+    "D": "D-观望"
+  },
+  "lead_sources": [
+    "新获客",
+    "老客转介绍",
+    "老客续费"
+  ],
+  "lead_source_aliases": {
+    "主动开发": "新获客",
+    "老客户转介绍": "老客转介绍"
+  },
+  "demand_categories": [
+    "散装",
+    "68礼盒",
+    "98礼盒",
+    "138礼盒",
+    "定制礼盒",
+    "待定"
+  ],
+  "customer_types": [
+    "企业客户",
+    "政府/事业单位",
+    "协会/商会",
+    "渠道客户",
+    "个人团购",
+    "其他"
+  ],
+  "customer_levels": [
+    "核心客户",
+    "重点客户",
+    "一般客户",
+    "潜在客户"
+  ],
+  "customer_statuses": [
+    "活跃",
+    "待激活",
+    "沉睡",
+    "流失"
+  ],
+  "status_machine": {
+    "states": [
+      "初次接触",
+      "需求确认",
+      "方案报价",
+      "谈判中",
+      "已签约",
+      "已回款",
+      "已流失"
+    ],
+    "default_entry_stage": "初次接触",
+    "linear_flow": [
+      "初次接触",
+      "需求确认",
+      "方案报价",
+      "谈判中",
+      "已签约",
+      "已回款"
+    ],
+    "transitions": {
+      "初次接触": [
+        "需求确认",
+        "已流失"
+      ],
+      "需求确认": [
+        "方案报价",
+        "已流失"
+      ],
+      "方案报价": [
+        "谈判中",
+        "已流失"
+      ],
+      "谈判中": [
+        "已签约",
+        "已流失"
+      ],
+      "已签约": [
+        "已回款"
+      ],
+      "已回款": [],
+      "已流失": []
+    },
+    "churn_from_states": [
+      "初次接触",
+      "需求确认",
+      "方案报价",
+      "谈判中"
+    ],
+    "stage_aliases": {
+      "谈判跟进": "谈判中"
+    },
+    "removed_states": [
+      "暂缓跟进",
+      "已成交",
+      "新增线索",
+      "已报价",
+      "跟进中"
+    ],
+    "terminal_states": [
+      "已回款",
+      "已流失"
+    ],
+    "closing_states": [
+      "已签约",
+      "已回款",
+      "已流失"
+    ],
+    "reminder_stop_states": [
+      "已签约",
+      "已回款",
+      "已流失"
+    ],
+    "note": "V1.2七态：正常流转为线性 初次接触→需求确认→方案报价→谈判中→已签约→已回款；各未成交态可→已流失（终止态，流失原因必填）。不保留暂缓跟进；原'谈判跟进'统一为'谈判中'。"
+  },
+  "reminder_days": {
+    "by_intent_level": {
+      "A": 3,
+      "B": 5,
+      "C": 7,
+      "D": null
+    },
+    "after_stage": {
+      "方案报价": 2
+    },
+    "overdue_retry": 1,
+    "upcoming_window_days": 7,
+    "configurable": true,
+    "note": "天数均为可配置参数，最终值由客户业务负责人确认，不得写死在提示词或代码中。规则（V1.2.4 杰哥08-11拍板）：严格按 ABCD 天数提醒（A3/B5/C7；方案报价2天优先于等级规则，含D级）；即使客户/店长口述了下次跟进时间，也仍按 ABCD 天数提醒，口述时间只记入跟进内容、不覆盖提醒；仅当等级规则无天数（D级）且口述了时间时，才按口述时间排提醒，避免提醒丢失；到期未完成按 overdue_retry=1 天再次提醒，直至完成/重排日期/进入 reminder_stop_states。"
+  },
+  "deal_attribution": {
+    "closing_states": [
+      "已签约",
+      "已回款",
+      "已流失"
+    ],
+    "signed_condition": "当前阶段==已签约 或 stage_history 到过已签约（累计里程碑口径）",
+    "paid_condition": "当前阶段==已回款 且 payment_date+payment_amount 已写入",
+    "signed_tracked_separately": true,
+    "note": "V1.2：签约与回款为独立阶段，分开统计不混用。已签约未回款可另建回款任务，已回款未交货可另建交货任务，均不属于普通回访。报表已签约数采用累计里程碑口径（进入已回款仍计入已签约数），依赖 opportunity.stage_history，不能只靠当前阶段反推。"
+  },
+  "report": {
+    "orientation": "by_store_horizontal",
+    "store_columns": [
+      "月湖店",
+      "体验中心店",
+      "国金店",
+      "五一店",
+      "花样汇店",
+      "合计"
+    ],
+    "attribution": "按商机所属门店归属，不按跟进人所在门店临时归属",
+    "metrics": [
+      "团单总数",
+      "A-必成",
+      "B-高潜",
+      "C-跟进",
+      "D-观望",
+      "A级占比",
+      "预计总金额",
+      "需求类别分布",
+      "已签约数",
+      "已回款数",
+      "已流失数",
+      "谈判中数",
+      "签约转化率"
+    ],
+    "expected_amount_excludes_lost": true,
+    "signed_cumulative_milestone": true,
+    "percent_zero_rule": "分母为0时显示0%",
+    "conversion_rate": "签约转化率 = 已签约数 ÷ 团单总数 × 100%"
+  },
+  "operation_log_fields": {
+    "note": "以下字段修改必须写 ledger.operation_log：门店、跟进人、预计金额、回款金额、各类日期（下次跟进/回款/交货）。",
+    "fields": [
+      "store",
+      "owner",
+      "expected_amount",
+      "payment_amount",
+      "next_follow_date",
+      "payment_date",
+      "delivery_date"
+    ]
+  },
+  "quote_tool": {
+    "runtime": "node",
+    "relpath": "../mooncake-brother-quote-tool/scripts/generate_excel_quote.mjs",
+    "kind": "单盒含税运成本预算组盒（全成本核算 Excel，非客户-facing 阶梯报价单）",
+    "required_flags": [
+      "customer",
+      "budget-per-box",
+      "notes",
+      "order-quantity",
+      "delivery-area"
+    ],
+    "defaults": {
+      "invoice": "ordinary",
+      "box": "吉祥如意",
+      "notes": "无",
+      "delivery_area": "长沙市内"
+    },
+    "budget_per_box_derivation": "expected_amount / quantity（两者都有时，四舍五入到分）；否则必须由店长给出单盒预算。",
+    "candidate_mode": "--list-plans N（只算候选，不出文件）",
+    "excel_mode": "--alternatives N --plan-index K（出 客户名称-日期.xlsx）",
+    "forbidden_flags": [
+      "profit-margin",
+      "profit-amount"
+    ],
+    "output_is": ".xlsx（内部成本核算表，不是发给客户的报价单）"
+  },
+  "export": {
+    "门店客户商机表": {
+      "title_row": "月饼哥哥｜门店客户商机表",
+      "rule_row": "使用规则：一条团购需求/商机一行；带“*”为门店首次录入必填项；下次跟进日期/回款日期/回款金额/流失原因为条件必填（按V1.2第5.2节规则动态校验）；后续可通过语音持续更新。",
+      "header_row_index": 4,
+      "columns": [
+        [
+          "opp_id",
+          "商机编号"
+        ],
+        [
+          "cust_id",
+          "客户编号"
+        ],
+        [
+          "customer_name",
+          "客户名称*"
+        ],
+        [
+          "customer_address",
+          "公司地址"
+        ],
+        [
+          "contact",
+          "联系人*"
+        ],
+        [
+          "contact_phone",
+          "联系电话/微信*"
+        ],
+        [
+          "store",
+          "所属门店*"
+        ],
+        [
+          "lead_source",
+          "线索来源"
+        ],
+        [
+          "customer_need",
+          "客户需求*"
+        ],
+        [
+          "demand_category",
+          "需求类别"
+        ],
+        [
+          "quantity",
+          "意向数量（盒）"
+        ],
+        [
+          "intent_level",
+          "意向等级*"
+        ],
+        [
+          "expected_amount",
+          "预计金额"
+        ],
+        [
+          "stage",
+          "当前阶段*"
+        ],
+        [
+          "latest_follow",
+          "最近跟进情况"
+        ],
+        [
+          "next_follow_date",
+          "下次跟进日期"
+        ],
+        [
+          "owner",
+          "跟进人*"
+        ],
+        [
+          "payment_date",
+          "回款日期"
+        ],
+        [
+          "payment_amount",
+          "回款金额"
+        ],
+        [
+          "delivery_date",
+          "交货日期"
+        ],
+        [
+          "lost_reason",
+          "流失原因"
+        ],
+        [
+          "updated_at",
+          "最后更新时间"
+        ]
+      ]
+    },
+    "总部客户档案表": {
+      "title_row": "月饼哥哥｜总部客户档案表",
+      "rule_row": "使用规则：一家客户一行；蓝色字段由门店商机数据同步/汇总，橙色字段由总部持续补充维护。",
+      "header_row_index": 4,
+      "columns": [
+        [
+          "cust_id",
+          "客户编号"
+        ],
+        [
+          "name",
+          "客户名称"
+        ],
+        [
+          "short_name",
+          "客户简称"
+        ],
+        [
+          "customer_type",
+          "客户类型"
+        ],
+        [
+          "industry",
+          "所属行业"
+        ],
+        [
+          "customer_level",
+          "客户级别"
+        ],
+        [
+          "region",
+          "所在区域"
+        ],
+        [
+          "address",
+          "详细地址"
+        ],
+        [
+          "contact",
+          "主联系人"
+        ],
+        [
+          "title",
+          "职务"
+        ],
+        [
+          "contact_phone",
+          "联系电话/微信"
+        ],
+        [
+          "other_contacts",
+          "其他关键联系人"
+        ],
+        [
+          "first_lead_source",
+          "首次线索来源"
+        ],
+        [
+          "first_store",
+          "首次开发门店"
+        ],
+        [
+          "current_store",
+          "当前归属门店"
+        ],
+        [
+          "customer_owner",
+          "客户负责人"
+        ],
+        [
+          "first_coop_date",
+          "首次合作日期"
+        ],
+        [
+          "last_coop_date",
+          "最近合作日期"
+        ],
+        [
+          "history_products",
+          "历史购买产品"
+        ],
+        [
+          "history_deal_count",
+          "历史成交次数"
+        ],
+        [
+          "total_deal_amount",
+          "累计成交金额"
+        ],
+        [
+          "year_deal_amount",
+          "本年度成交金额"
+        ],
+        [
+          "preference",
+          "客户偏好"
+        ],
+        [
+          "tags",
+          "重要客户标签"
+        ],
+        [
+          "customer_status",
+          "客户状态"
+        ],
+        [
+          "notes",
+          "备注"
+        ],
+        [
+          "archive_updated_at",
+          "档案最后更新时间"
+        ]
+      ],
+      "computed_fields": [
+        "first_coop_date",
+        "last_coop_date",
+        "history_products",
+        "history_deal_count",
+        "total_deal_amount",
+        "year_deal_amount",
+        "archive_updated_at"
+      ]
+    },
+    "date_cells": [
+      "next_follow_date",
+      "payment_date",
+      "delivery_date",
+      "updated_at",
+      "first_coop_date",
+      "last_coop_date",
+      "archive_updated_at"
+    ]
+  }
+}

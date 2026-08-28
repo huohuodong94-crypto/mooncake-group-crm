@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>月饼哥哥 · 门店团购</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--ink:#1f2329;--sub:#8a919f;--line:#eceef1;--brand:#c8102e;--ok:#00b365;--warn:#ff9500;--bad:#f5483b}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.5;padding-bottom:env(safe-area-inset-bottom)}
+.wrap{max-width:480px;margin:0 auto;padding:12px}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:10px 4px 14px}
+.hd h1{font-size:17px;font-weight:700}
+.hd .date{color:var(--sub);font-size:12px}
+.card{background:var(--card);border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.card h2{font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.tag{display:inline-block;font-size:11px;padding:1px 8px;border-radius:9px;color:#fff}
+.tag.a{background:var(--brand)}.tag.b{background:var(--warn)}.tag.c{background:#5b8def}.tag.d{background:#a3a8b3}
+.row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.row:last-child{border-bottom:none}
+.row .k{color:var(--sub);flex-shrink:0;margin-right:12px}
+.row .v{font-weight:600;text-align:right;word-break:break-all}
+.row .v.hl{color:var(--brand);font-size:16px}
+.need-confirm .v{background:#fff7e6;border-radius:4px;padding:0 4px}
+.btns{display:flex;gap:10px;margin-top:14px}
+.btns button{flex:1;padding:12px 0;border:none;border-radius:10px;font-size:15px;font-weight:600}
+.btn-ok{background:var(--brand);color:#fff}
+.btn-cancel{background:#eef0f3;color:var(--ink)}
+.tip{font-size:12px;color:var(--sub);margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--card);font-weight:600}
+th{color:var(--sub);font-weight:500;background:var(--card)}
+tr.total td{font-weight:700;background:#fdf3f4;position:static}
+tr.total td:first-child{background:#fdf3f4}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:0 -4px}
+.metric-note{font-size:12px;color:var(--sub);margin-top:8px}
+.foot{text-align:center;color:var(--sub);font-size:11px;padding:16px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd"><h1>🥮 月饼哥哥 · 门店团购</h1><span class="date" id="hd-date"></span></div>
+  <div id="confirm-area"></div>
+  <div id="report-area"></div>
+  <div class="foot">门店团购轻量CRM V1.2 · 数据以确认后写入为准</div>
+</div>
+<script>
+const DATA = __MOBILE_DATA__;
+const $ = s => document.querySelector(s);
+$('#hd-date').textContent = DATA.generated_at || '';
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+const tagOf = lv => ({'A':'a','B':'b','C':'c','D':'d'}[lv]||'c');
+const lvName = {'A':'A-必成','B':'B-高潜','C':'C-跟进','D':'D-观望'};
+
+// ---------- 确认卡 ----------
+if (DATA.confirm_card) {
+  const c = DATA.confirm_card;
+  const needConfirm = ['预计金额','意向数量','联系电话/微信','下次跟进日期','回款日期','回款金额','交货日期'];
+  let rows = '';
+  for (const f of c.fields) {
+    const hl = needConfirm.includes(f.k);
+    rows += `<div class="row${hl?' need-confirm':''}"><span class="k">${esc(f.k)}</span><span class="v${hl?' hl':''}">${esc(f.v)}</span></div>`;
+  }
+  $('#confirm-area').innerHTML = `
+    <div class="card">
+      <h2>📝 ${esc(c.title)} <span class="tag ${tagOf(c.intent_level)}">${esc(lvName[c.intent_level]||c.intent_level||'')}</span></h2>
+      ${rows}
+      <div class="tip">⚠️ 黄色高亮为金额/数量/电话/日期关键字段，请逐项核对；确认无误后再写入。</div>
+      <div class="btns"><button class="btn-cancel" onclick="alert('已取消，未写入任何数据')">取消</button><button class="btn-ok" onclick="alert('已确认，引擎将以 --confirmed 写入台账')">确认写入</button></div>
+    </div>`;
+}
+
+// ---------- 报表 ----------
+if (DATA.report) {
+  const r = DATA.report;
+  const metrics = ['团单总数','A','B','C','D','A级占比','预计总金额','已签约数','已回款数','已流失数','谈判中数','签约转化率'];
+  const label = {'A':'A-必成','B':'B-高潜','C':'C-跟进','D':'D-观望'};
+  let head = '<tr><th>指标</th>' + r.rows.map(x=>`<th>${esc(x['门店'])}</th>`).join('') + '</tr>';
+  let body = '';
+  for (const m of metrics) {
+    body += '<tr'+(m==='团单总数'?' style="font-weight:700"':'')+'><td>'+esc(label[m]||m)+'</td>' +
+      r.rows.map(x=>`<td>${esc(x[m]==null?'-':x[m])}</td>`).join('') + '</tr>';
+  }
+  // 需求类别分布行
+  const cats = Object.keys(r.rows.reduce((acc,x)=>{Object.keys(x['需求类别分布']||{}).forEach(k=>acc[k]=1);return acc;},{}));
+  for (const cat of cats) {
+    body += '<tr><td>'+esc(cat)+'</td>' + r.rows.map(x=>`<td>${esc((x['需求类别分布']||{})[cat]||0)}</td>`).join('') + '</tr>';
+  }
+  $('#report-area').innerHTML = `
+    <div class="card">
+      <h2>📊 按门店汇总（截至 ${esc(r.today)}）</h2>
+      <div class="scroll"><table>${head}${body}</table></div>
+      <div class="metric-note">· 已签约数按累计里程碑口径（含已回款）<br>· 预计总金额不含已流失<br>· 左右滑动查看更多门店</div>
+    </div>`;
+}
+</script>
+</body>
+</html>
