@@ -1,0 +1,26 @@
+{
+  "intent": "add_customer",
+  "recorded_at": "2026-07-31",
+  "store": "国金店",
+  "owner": "张店长",
+  "source": "老客转介绍",
+  "customer": {
+    "name": "深圳八方科技有限公司",
+    "contact": "王经理",
+    "contact_phone": "13800000000",
+    "customer_type": "企业客户"
+  },
+  "opportunity": {
+    "customer_need": "员工中秋福利，预算约150元/份",
+    "customer_address": "深圳市南山区科技园",
+    "demand_category": "68礼盒",
+    "quantity": 300,
+    "intent_level": "A",
+    "expected_amount": 45000,
+    "stage": "方案报价",
+    "next_follow_date": "2026-08-05"
+  },
+  "follow_up": {
+    "content": "已发送报价方案，客户内部确认中"
+  }
+}
