@@ -1,0 +1,18 @@
+# 敏感数据
+data/ledger.json
+data/*.bak-*
+
+# 临时文件
+_doctor_report.json
+_meta.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
