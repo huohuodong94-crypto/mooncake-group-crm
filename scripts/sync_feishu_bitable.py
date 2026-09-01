@@ -26,7 +26,7 @@ sys.path.insert(0, str(SKILL_DIR / "scripts"))
 
 import crm  # noqa: E402
 
-DEFAULT_BASE_TOKEN = "FjMNbdLI1ab87Us3fTmcmROWnJb"
+DEFAULT_BASE_TOKEN = "VTdNbS9iJaeqZxsqFS3ccGv8n2f"
 DEFAULT_BATCH_SIZE = 50
 MAX_BATCH = 200  # 飞书 API 单批上限
 

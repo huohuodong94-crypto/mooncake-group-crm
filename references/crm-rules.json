@@ -352,7 +352,7 @@
         ],
         [
           "customer_name",
-          "客户名称*"
+          "客户名称"
         ],
         [
           "customer_address",
@@ -360,15 +360,15 @@
         ],
         [
           "contact",
-          "联系人*"
+          "联系人"
         ],
         [
           "contact_phone",
-          "联系电话/微信*"
+          "联系电话/微信"
         ],
         [
           "store",
-          "所属门店*"
+          "所属门店"
         ],
         [
           "lead_source",
@@ -376,7 +376,7 @@
         ],
         [
           "customer_need",
-          "客户需求*"
+          "客户需求"
         ],
         [
           "demand_category",
@@ -388,7 +388,7 @@
         ],
         [
           "intent_level",
-          "意向等级*"
+          "意向等级"
         ],
         [
           "expected_amount",
@@ -396,7 +396,7 @@
         ],
         [
           "stage",
-          "当前阶段*"
+          "当前阶段"
         ],
         [
           "latest_follow",
@@ -408,7 +408,7 @@
         ],
         [
           "owner",
-          "跟进人*"
+          "跟进人"
         ],
         [
           "payment_date",
