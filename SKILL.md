@@ -15,7 +15,7 @@ description: 月饼哥哥门店团购客户与商机台账助手。用于登记�
 - 只抽取语音/文字来源字段；编号由引擎生成，门店和跟进人优先由账号上下文带入，总部维护字段首次留空。
 - 金额、数量、电话和日期必须逐项回读并得到明确确认；未确认时不得添加 `--confirmed`，不得绕过引擎返回的 `needs_confirmation`。
 - 所有写入先通过校验，再展示预览并等待确认。组盒报价必须委派给 `mooncake-brother-quote-tool`，本 Skill 不自行计算价格。
-- 飞书双表的固定目标是：`https://ccn3dhq4y5he.feishu.cn/base/FjMNbdLI1ab87Us3fTmcmROWnJb?table=tblJgewTBFUQx8Mm&view=vewjFD8466`。目标类型是飞书多维表格；在线同步通过 `scripts/sync_feishu_bitable.py`（或 `crm.py --mode sync-feishu`）调用 lark-cli 执行，需 lark-cli 已登录且当前账号对目标 Base 有编辑权限。联系人、电话、地址、金额等数据写入飞书前必须在动作发生前再次明确确认。
+- 飞书双表的固定目标是：`https://fcnyov5kmksd.feishu.cn/wiki/HFlUwey8YiKzWckxK3Nc06xOnc6?table=tblFmj79Cvo2SGmT&view=vewLSQ42CX`。目标类型是飞书多维表格；在线同步使用专用连接器或已登录且有编辑权限的浏览器会话，不读取浏览器凭据、环境变量或部署配置。联系人、电话、地址、金额等数据写入飞书前必须在动作发生前再次明确确认。
 
 ## 概述
 
@@ -68,7 +68,7 @@ description: 月饼哥哥门店团购客户与商机台账助手。用于登记�
 | `summary` | 周期汇总 | `--period daily\|weekly\|monthly` |
 | `review` | 文本复盘 | `--period` |
 | `export-xlsx` | 导出双表 | `--out 路径.xlsx` |
-| `sync-feishu` | 飞书多维表格双表增量同步（V1.2.9） | 默认 dry-run 预览；`--yes` 实际写入；可选 `--base-token --table-opp --table-cust --batch-size`；依赖 lark-cli 已登录且对目标 Base 有权限 |
+| 飞书同步（Agent 编排） | 将完整双表增量写入固定飞书多维表格 | 先生成两张表的完整记录集，再按 `references/feishu-bitable-sync.md` 同步；不是 `crm.py` 的独立 CLI 模式 |
 | `quote` | 委派组盒报价 | `--customer --order-quantity`,`--budget-per-box` 或 `--amount --quantity`,`--notes --delivery-area --invoice --box --list-plans N` 或 `--plan-index K --out` |
 | `apply` | 吃一条已校验的抽取记录写库 | `--record record.json`(含金额/数量/电话/日期时加 `--confirmed`) |
 
@@ -102,20 +102,7 @@ python3 scripts/crm.py --mode export-xlsx --out 双表.xlsx    # 导出对齐模
 
 ### 飞书多维表格双表同步
 
-同步目标固定为上述飞书 Base。通过 `scripts/sync_feishu_bitable.py` 或 `crm.py --mode sync-feishu` 执行：
-
-```bash
-# 预览（默认 dry-run，不写入）
-python3 scripts/crm.py --mode sync-feishu
-# 或独立脚本
-python3 scripts/sync_feishu_bitable.py
-
-# 确认无误后实际写入
-python3 scripts/crm.py --mode sync-feishu --yes
-python3 scripts/sync_feishu_bitable.py --yes
-```
-
-脚本自动完成：读取本地台账生成双表记录集 → 列出 Base 中数据表并按名称匹配 → 读取字段校验 → 拉取远程已有记录建立主键映射 → 按「商机编号」/「客户编号」增量 upsert（新增用 batch-create，更新用 batch-update）→ 输出新增/更新/失败统计。默认不删除在线独有记录；字段缺失或类型冲突时停止该表同步并报告。同步前需确认 lark-cli 已登录且当前账号对目标 Base 有编辑权限（错误码 91403 表示无权限，需 Base 所有者共享）。
+同步目标固定为上述飞书 Base。先生成两张表的完整记录集，再读取 `references/feishu-bitable-sync.md`，通过可用的飞书多维表格连接器或已登录浏览器把两张数据表按主键增量写入。默认只新增或更新记录，不删除在线独有记录；清空重建、删除字段或改变字段类型必须另行明确确认。同步完成后核对数据表名称、字段、记录数和抽样主键，并报告新增、更新、跳过和失败数量。
 
 ### 复盘与周报
 
@@ -192,8 +179,7 @@ python3 scripts/crm.py --mode quote --customer "客户名称" --amount 15000 --q
 
 ## 附加资源
 
-- `scripts/crm.py`:确定性引擎(台账 CRUD、提醒、汇总、复盘、导出、报价委派、`apply` 消费抽取记录、`sync-feishu` 飞书双表同步)。
-- `scripts/sync_feishu_bitable.py`:飞书多维表格双表同步脚本（V1.2.9），基于 lark-cli 做字段校验、按主键增量 upsert、结果核验；默认 dry-run。
+- `scripts/crm.py`:确定性引擎(台账 CRUD、提醒、汇总、复盘、导出、报价委派、`apply` 消费抽取记录)。
 - `scripts/prepare_extraction.py` / `scripts/validate_mooncake-group-crm_output.py`:契约 producer 与校验闸口。
 - `scripts/gen_review_report.py` + `assets/review-template.html`:自包含 HTML 周报渲染。
 - `scripts/run_mooncake-group-crm.sh`:抽取/校验/写库/周报的串联脚本。
@@ -207,7 +193,6 @@ python3 scripts/crm.py --mode quote --customer "客户名称" --amount 15000 --q
 
 | 版本 | 日期 | 变更 |
 |------|------|------|
-| 1.2.9 | 2026-08-27 | 补上真正的飞书多维表格双表同步实现：新增 `scripts/sync_feishu_bitable.py`，`crm.py` 增加 `sync-feishu` 模式，基于 lark-cli 做字段校验、按主键增量 upsert 和结果核验；默认 dry-run，`--yes` 实际写入 |
 | 1.2.8 | 2026-08-26 | 在线交付目标由飞书电子表格改为指定飞书多维表格 Base；双表按记录主键增量写入，并增加字段类型校验和数据表创建边界 |
 | 1.2.7 | 2026-08-26 | 双表交付目标接入固定飞书电子表格“市场部客户信息”；按商机编号/客户编号增量同步，默认不删除在线数据，并增加敏感数据上传确认与同步核验 |
 | 1.2.6 | 2026-08-26 | 归属单位新增“市场部”，参与新增校验、查询、导出和横向汇总；保留“体验店”到“体验中心店”的旧名归一逻辑 |

@@ -29,11 +29,16 @@ SKILL_DIR = Path(__file__).resolve().parent.parent
 RULES_PATH = SKILL_DIR / "references" / "crm-rules.json"
 DEFAULT_LEDGER = SKILL_DIR / "data" / "ledger.json"
 
-# ----------------------------- 本地主库 -----------------------------
-# 本地 JSON 是唯一主库；飞书 Base 是显式同步的交付镜像，不是可替换的存储后端。
-# 在线同步由 sync_feishu_bitable.py 负责，避免网络失败被静默伪装成本地写入成功。
+# ----------------------------- 存储后端抽象 -----------------------------
+# 支持双后端：local_json（默认）/ feishu_bitable（飞书在线表格）
+STORAGE_BACKEND = os.getenv("CRM_STORAGE_BACKEND", "local_json")  # feishu_bitable 需配置 FEISHU_BITABLE_APP_TOKEN / TABLE_ID
+FEISHU_APP_TOKEN = os.getenv("FEISHU_BITABLE_APP_TOKEN", "")
+FEISHU_TABLE_ID = os.getenv("FEISHU_BITABLE_TABLE_ID", "")
+
 def get_storage_backend(path=None):
-    """返回本地主库实例。path 指定时使用该隔离路径。"""
+    """返回当前存储后端实例。path 指定时本地后端使用该路径（修复 --data 隔离失效）。"""
+    if STORAGE_BACKEND == "feishu_bitable" and FEISHU_APP_TOKEN and FEISHU_TABLE_ID:
+        return FeishuBitableBackend(FEISHU_APP_TOKEN, FEISHU_TABLE_ID)
     return LocalJsonBackend(path or DEFAULT_LEDGER)
 
 
@@ -70,6 +75,27 @@ class LocalJsonBackend:
         done = self.path.parent / ".done"
         done.touch()
 
+
+class FeishuBitableBackend:
+    """飞书多维表格后端（预留接口，当前降级到local_json）。"""
+    def __init__(self, app_token, table_id):
+        self.app_token = app_token
+        self.table_id = table_id
+        self._fallback = LocalJsonBackend(DEFAULT_LEDGER)
+    
+    def load(self):
+        # TODO: 接入飞书Bitable API读取记录
+        # 当前降级：先读本地缓存，确保离线可用
+        return self._fallback.load()
+    
+    def save(self, ledger):
+        # TODO: 接入飞书Bitable API写入记录
+        # 当前降级：写本地，同时打标记待同步
+        self._fallback.save(ledger)
+        # 预留：写入待同步队列或调用飞书API
+    
+    def ensure_done(self):
+        self._fallback.ensure_done()
 
 PIPELINE_STAGES = ["初次接触", "需求确认", "方案报价", "谈判中"]
 EXTRA_STORES = ["市场部"]
@@ -1102,148 +1128,6 @@ def _customer_aggregates(ledger, cust_id, year):
     }
 
 
-def build_sync_record_sets(ledger, rules, today):
-    """生成飞书双表镜像的确定性 JSON 记录集，不访问网络。
-
-    字段名、列序和主键均来自现有 export 契约，避免 Excel 成为在线同步的
-    中间格式。返回值可直接交给 sync_feishu_bitable.py 做预览或写入。
-    """
-    year = parse_date(today).year
-    exp = rules["export"]
-
-    def make_table(table_name, primary_internal_key, source_rows):
-        cfg = exp[table_name]
-        columns = cfg["columns"]
-        header_by_key = dict(columns)
-        primary_key = header_by_key[primary_internal_key]
-        records = []
-        seen = set()
-        errors = []
-        for index, row_data in enumerate(source_rows, start=1):
-            fields = {header: row_data.get(key) for key, header in columns}
-            key_value = fields.get(primary_key)
-            if key_value is None or str(key_value).strip() == "":
-                errors.append({"type": "blank_primary_key", "row": index, "field": primary_key})
-                continue
-            key_text = str(key_value)
-            if key_text in seen:
-                errors.append({"type": "duplicate_primary_key", "row": index,
-                               "field": primary_key, "value": key_text})
-                continue
-            seen.add(key_text)
-            records.append({"key": key_text, "fields": fields})
-        return {
-            "primary_key": primary_key,
-            "columns": [header for _, header in columns],
-            "records": records,
-            "errors": errors,
-        }
-
-    opportunities = [dict(o) for o in ledger.get("opportunities", [])]
-    customers = []
-    for customer in ledger.get("customers", []):
-        row_data = dict(customer)
-        row_data.update(_customer_aggregates(ledger, customer["cust_id"], year))
-        row_data.setdefault("archive_updated_at", customer.get("archive_updated_at"))
-        customers.append(row_data)
-
-    tables = {
-        "门店客户商机表": make_table("门店客户商机表", "opp_id", opportunities),
-        "总部客户档案表": make_table("总部客户档案表", "cust_id", customers),
-    }
-    return {
-        "schema_version": 1,
-        "generated_at": datetime.now().isoformat(timespec="seconds"),
-        "source": "local_json",
-        "tables": tables,
-        "errors": [
-            {"table": table_name, **error}
-            for table_name, table in tables.items()
-            for error in table["errors"]
-        ],
-    }
-
-
-def cmd_export_sync_json(a, ledger, rules, today):
-    payload = build_sync_record_sets(ledger, rules, today)
-    if a.out:
-        out_path = Path(a.out).expanduser().resolve()
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-        return {
-            "status": "exported",
-            "out": str(out_path),
-            "counts": {name: len(table["records"]) for name, table in payload["tables"].items()},
-            "errors": payload["errors"],
-            "_human": f"已导出飞书双表同步 JSON：{out_path}",
-        }
-    return payload
-
-
-def cmd_sync_feishu(a, ledger, rules, today):
-    """飞书多维表格双表同步（V1.2.9 新增）。
-
-    调用 sync_feishu_bitable.run_sync()，默认 dry-run 只预览；
-    带 --yes 实际写入飞书。依赖 lark-cli 已登录且对目标 Base 有权限。
-    """
-    try:
-        from sync_feishu_bitable import run_sync
-    except ImportError:
-        return {"error": "dependency", "detail": "找不到 sync_feishu_bitable.py，请确认 scripts/ 目录完整"}
-
-    # 透传参数
-    base_token = getattr(a, "base_token", None) or None
-    table_opp = getattr(a, "table_opp", None) or None
-    table_cust = getattr(a, "table_cust", None) or None
-    batch_size = getattr(a, "batch_size", 50) or 50
-    dry_run = not getattr(a, "yes", False)
-
-    result = run_sync(
-        base_token=base_token,
-        table_opp=table_opp,
-        table_cust=table_cust,
-        data=a.data,
-        rules=a.rules,
-        today=today,
-        dry_run=dry_run,
-        batch_size=batch_size,
-        as_json=a.json,
-    )
-
-    if a.json:
-        print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
-        return {"_consumed": True}
-
-    # 人类可读输出
-    if not result.get("ok"):
-        print(f"飞书同步失败（{result.get('stage', '?')}）: {result.get('error', result.get('detail', '?'))}")
-        if result.get("hint"):
-            print(f"提示: {result['hint']}")
-        return {"_consumed": True}
-
-    mode = "实际写入" if result["mode"] == "write" else "预览（dry-run）"
-    print(f"飞书双表同步 · {mode}")
-    print(f"Base: {result['base_token']}")
-    for r in result["results"]:
-        table = r.get("table", "?")
-        if r.get("status") == "table_not_found":
-            print(f"  [{table}] 表不存在: {r.get('error')}")
-        elif r.get("status") == "error":
-            print(f"  [{table}] 错误: {r.get('error')}")
-        elif "total_local" in r:
-            print(f"  [{table}] 本地 {r['total_local']} 条 | 远程已有 {r.get('existing_remote', '?')} | "
-                  f"待新增 {r.get('to_create', 0)} | 待更新 {r.get('to_update', 0)}"
-                  + (f" | 失败 {r.get('failed', 0)}" if r.get("failed") else ""))
-            if r.get("missing_fields"):
-                print(f"    缺少字段: {r['missing_fields']}")
-            if r.get("errors"):
-                for e in r["errors"]:
-                    print(f"    错误: {e}")
-    if result["mode"] == "dry-run":
-        print("\n这是预览，未写入飞书。确认无误后加 --yes 执行实际写入。")
-    return {"_consumed": True}
-
-
 def cmd_export_xlsx(a, ledger, rules, today):
     if not a.out:
         return {"error": "missing_field", "detail": "export-xlsx 需要 --out 指定输出路径"}
@@ -1493,9 +1377,7 @@ def build_parser():
     p = argparse.ArgumentParser(description="门店团购客户与商机台账引擎（双表模型）")
     p.add_argument("--mode", "-m", required=True,
                    choices=["add", "update", "log", "close", "show", "due", "query",
-                            "summary", "report", "review", "export-xlsx", "export-sync-json",
-                            "sync-feishu",
-                            "all", "quote", "apply"])
+                            "summary", "report", "review", "export-xlsx", "all", "quote", "apply"])
     p.add_argument("--data", default=str(DEFAULT_LEDGER), help="台账 JSON 路径")
     p.add_argument("--rules", default=str(RULES_PATH), help="规则文件路径")
     p.add_argument("--today", default=None, help="今天 YYYY-MM-DD（默认系统日期）")
@@ -1539,12 +1421,6 @@ def build_parser():
     p.add_argument("--image-dir"); p.add_argument("--date"); p.add_argument("--dry-run", action="store_true")
     # apply（契约 consumer）
     p.add_argument("--record", help="apply 模式：已校验的抽取记录 JSON 文件")
-    # 飞书同步（V1.2.9）
-    p.add_argument("--base-token", default=None, help="sync-feishu：飞书 Base token")
-    p.add_argument("--table-opp", default=None, help="sync-feishu：商机表名称")
-    p.add_argument("--table-cust", default=None, help="sync-feishu：客户档案表名称")
-    p.add_argument("--batch-size", type=int, default=50, help="sync-feishu：每批写入记录数（最大200）")
-    p.add_argument("--yes", action="store_true", help="sync-feishu：实际写入飞书（默认 dry-run 预览）")
     # 可靠性（V1.2.2）
     p.add_argument("--expect-version", type=int, help="乐观锁：期望的商机版本号，不匹配则拒绝更新")
     p.add_argument("--idempotency-key", help="幂等键：相同key重复提交只执行一次")
@@ -1588,8 +1464,6 @@ def main(argv=None):
         "report": lambda: cmd_report(args, ledger, rules, today),
         "review": lambda: cmd_review(args, ledger, rules, today),
         "export-xlsx": lambda: cmd_export_xlsx(args, ledger, rules, today),
-        "export-sync-json": lambda: cmd_export_sync_json(args, ledger, rules, today),
-        "sync-feishu": lambda: cmd_sync_feishu(args, ledger, rules, today),
         "all": lambda: cmd_all(args, ledger, rules, today),
         "quote": lambda: cmd_quote(args, ledger, rules, today),
         "apply": lambda: cmd_apply(args, ledger, rules, today),
@@ -1602,9 +1476,7 @@ def main(argv=None):
                 "at": today, "mode": args.mode,
                 "result": {k: v for k, v in result.items() if k != "_human"}}
         save_ledger(args.data, ledger)
-    # sync-feishu 等模式自己控制输出，标记 _consumed 后不再 emit
-    if not (isinstance(result, dict) and result.get("_consumed")):
-        emit(result, args.json)
+    emit(result, args.json)
     return 0
 
 

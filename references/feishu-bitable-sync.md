@@ -2,8 +2,7 @@
 
 ## 固定目标
 
-- Base 地址：`https://ccn3dhq4y5he.feishu.cn/base/FjMNbdLI1ab87Us3fTmcmROWnJb?table=tblJgewTBFUQx8Mm&view=vewjFD8466`
-- Base token：`FjMNbdLI1ab87Us3fTmcmROWnJb`
+- Base 地址：`https://fcnyov5kmksd.feishu.cn/wiki/HFlUwey8YiKzWckxK3Nc06xOnc6?table=tblFmj79Cvo2SGmT&view=vewLSQ42CX`
 - 目标类型：飞书多维表格（Bitable/Base），不是普通电子表格
 - 目标数据表：`门店客户商机表`、`总部客户档案表`
 - 记录主键：商机表使用 `商机编号`，客户表使用 `客户编号`
@@ -11,50 +10,6 @@
 链接中的表和视图参数仅用于定位当前页面。只有数据表名称与目标名称一致时，才能直接复用该表；不要仅凭链接中的表标识推断其业务含义，也不要自动改造无关的现有数据表。
 
 本地台账是唯一数据源，飞书 Base 是交付镜像。不要从页面内容推导新规则，也不要从飞书反向覆盖本地台账。
-
-## 执行方式（V1.2.9）
-
-通过 `scripts/sync_feishu_bitable.py` 或 `crm.py --mode sync-feishu` 执行，底层调用 lark-cli。
-
-```bash
-# 预览（默认 dry-run，不写入飞书）
-python3 scripts/sync_feishu_bitable.py
-python3 scripts/crm.py --mode sync-feishu
-
-# 确认预览无误后实际写入
-python3 scripts/sync_feishu_bitable.py --yes
-python3 scripts/crm.py --mode sync-feishu --yes
-
-# JSON 输出（便于程序解析）
-python3 scripts/sync_feishu_bitable.py --json
-python3 scripts/crm.py --mode sync-feishu --json
-
-# 可选参数
-python3 scripts/sync_feishu_bitable.py \
-  --base-token FjMNbdLI1ab87Us3fTmcmROWnJb \
-  --table-opp 门店客户商机表 \
-  --table-cust 总部客户档案表 \
-  --batch-size 50 \
-  --data data/ledger.json
-```
-
-### 前置条件
-
-1. `lark-cli` 已安装并在 PATH 中
-2. `lark-cli` 已登录飞书账号（首次使用会引导登录）
-3. 当前登录账号对目标 Base 有**可编辑**权限
-   - 错误码 `91403: you don't have permission` 表示无权限，需 Base 所有者将该 Base 共享给当前账号
-   - 仅可查看权限不足以写入记录
-
-### 脚本自动执行的步骤
-
-1. 读取本地台账，调用 `build_sync_record_sets()` 生成双表记录集
-2. 调用 `lark-cli base +table-list` 列出 Base 中所有数据表，按名称匹配目标表
-3. 调用 `lark-cli base +field-list` 读取每张表的字段，校验本地字段是否都存在
-4. 调用 `lark-cli base +record-list` 分页拉取远程已有记录，建立「主键值 → record_id」映射
-5. 分类：本地记录中主键已存在的走更新，不存在的走新增
-6. 批量写入：`+record-batch-create`（新增）和 `+record-batch-update`（更新），每批默认 50 条
-7. 输出统计：新增数、更新数、失败数、缺少字段、错误详情
 
 ## 准备记录集
 
@@ -73,6 +28,14 @@ python3 scripts/sync_feishu_bitable.py \
 
 不要为了迁就已有错误字段类型而静默转换数据。字段缺失或类型冲突时先停止该表同步，列出差异并请用户决定；删除字段、改变字段类型或清空记录属于破坏性操作，必须另行明确确认。
 
+## 同步方式
+
+优先使用当前环境中可用的飞书多维表格连接器。没有专用连接器时，使用已登录且有编辑权限的浏览器会话打开固定 Base。不得读取 Cookie、本地存储、环境变量、配置文件或凭据；不得要求用户把密钥粘贴进聊天。
+
+页面未登录、无编辑权限、目标类型或地址不符、加载失败时停止，保留本地交付物并报告“未同步”。不要凭坐标盲写。
+
+数据表不存在时，可以在用户确认后创建同名数据表及字段；现有链接所指数据表名称不匹配时，不得自动重命名或清空。
+
 ## 增量写入
 
 | 数据表 | 主键 | 行为 |
@@ -82,7 +45,7 @@ python3 scripts/sync_feishu_bitable.py \
 
 主键搜索必须精确匹配。一次同步中出现重复主键时停止该表写入并报告冲突，不任选一条覆盖。默认不得删除飞书中存在但本地缺失的记录；用户明确要求全量镜像时，也必须在实际删除前说明删除范围并再次确认。
 
-批量写入时使用有限批次（默认 50，最大 200）；单批失败时停止后续批次并报告已完成范围，避免无界重试。重试同一批次必须保持幂等，不得造成重复记录。
+批量写入时使用有限批次；单批失败时停止后续批次并报告已完成范围，避免无界重试。重试同一批次必须保持幂等，不得造成重复记录。
 
 ## 动作前确认
 
@@ -94,7 +57,7 @@ python3 scripts/sync_feishu_bitable.py \
 - 默认不会删除在线独有记录；
 - 检测到的字段缺失或类型冲突。
 
-得到明确确认后才能开始写入（加 `--yes`）。未确认时只生成同步预览和本地交付物。
+得到明确确认后才能开始写入。未确认时只生成同步预览和本地交付物。
 
 ## 完成核验
 
@@ -107,13 +70,4 @@ python3 scripts/sync_feishu_bitable.py \
 5. 每张表抽查一个主键及联系电话、金额、日期等易变格式字段；
 6. 页面或连接器没有权限、冲突、限流或保存失败提示。
 
-最终报告新增、更新、跳过、失败数量及 Base 链接。只在有明确成功信号后报告"已同步"；否则报告"未同步"或"部分同步"，并说明已完成范围。
-
-## 常见错误
-
-| 错误 | 原因 | 解决 |
-|---|---|---|
-| `91403: you don't have permission` | 当前飞书账号对目标 Base 无权限 | 请 Base 所有者将 Base 共享给当前账号，或切换到有权限的账号 |
-| `lark-cli 不在 PATH 中` | 未安装 lark-cli | 安装 lark-cli 并完成登录 |
-| `表不存在` | Base 中没有同名数据表 | 在飞书 Base 中创建同名数据表及字段，或确认表名拼写 |
-| `缺少字段` | 飞书表中字段名与本地导出字段不一致 | 在飞书侧补齐缺失字段，或调整本地字段映射 |
+最终报告新增、更新、跳过、失败数量及 Base 链接。只在有明确成功信号后报告“已同步”；否则报告“未同步”或“部分同步”，并说明已完成范围。
